@@ -258,7 +258,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python python_hydra.py -u admin -p pass.txt -t https://example.com/login
+  python python_hydra.py -u admin -p pass.txt -t https://example.com/login -f "Invalid credentials"
   python python_hydra.py -c config.json -U users.txt -P pass.txt
   python python_hydra.py -u admin -p pass.txt -t https://example.com/login --interactive
         """
@@ -271,6 +271,7 @@ Examples:
     parser.add_argument('-P', '--passwords', help='Password file (alternative)')
     parser.add_argument('-c', '--config', help='Configuration file')
     parser.add_argument('-o', '--output', help='Output file for results')
+    parser.add_argument('-f', '--failure', help='Failure message to detect (e.g., "Username or Password is invalid")')
 
     parser.add_argument('--delay', type=float, default=0.5, help='Delay between requests (seconds)')
     parser.add_argument('--threads', type=int, default=5, help='Number of threads')
@@ -343,8 +344,11 @@ Examples:
         success_indicators = []
         failure_indicators = []
     
-    # Interactive mode: Let user enter failure message
-    if args.interactive or not failure_indicators:
+    # Set failure message from command line or interactive mode
+    if args.failure:
+        failure_indicators = [args.failure]
+        print(f"\033[92m✓ Failure message set to: '{args.failure}'\033[0m")
+    elif args.interactive or not failure_indicators:
         print("\n\033[93m" + "="*50 + "\033[0m")
         print("\033[96m" + "🔍 INTERACTIVE FAILURE MESSAGE SETUP" + "\033[0m")
         print("\033[93m" + "="*50 + "\033[0m")
