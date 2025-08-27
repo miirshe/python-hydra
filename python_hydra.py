@@ -338,10 +338,10 @@ Examples:
         success_indicators = config['target'].get('success_indicators', [])
         failure_indicators = config['target'].get('failure_indicators', [])
     else:
-        # Default form data (adjust based on your target)
-        form_data = {'username': '', 'password': '', 'submit': 'Login'}
-        success_indicators = ['welcome', 'dashboard', 'logout', 'success']
-        failure_indicators = ['invalid', 'failed', 'incorrect', 'error']
+        # Basic form data
+        form_data = {'username': '', 'password': ''}
+        success_indicators = []
+        failure_indicators = []
     
     # Interactive mode: Let user enter failure message
     if args.interactive or not failure_indicators:
@@ -364,31 +364,6 @@ Examples:
             print("\033[91m✗ No failure message entered. Using defaults.\033[0m")
         
         print("\033[93m" + "="*50 + "\033[0m\n")
-        
-        # Option to test the failure message
-        test_failure = input("\033[93mDo you want to test the failure message first? (y/n): \033[0m").strip().lower()
-        
-        if test_failure in ['y', 'yes']:
-            print("\n\033[94mTesting failure message detection...\033[0m")
-            print(f"Target URL: {target_url}")
-            print(f"Failure message: '{failure_indicators[0]}'")
-            
-            # Test with dummy credentials
-            test_response = requests.post(
-                target_url,
-                data={'username': 'test', 'password': 'test', 'submit': 'Login'},
-                headers=hydra.session.headers,
-                cookies=hydra.session.cookies,
-                timeout=30
-            )
-            
-            if failure_indicators[0].lower() in test_response.text.lower():
-                print("\033[92m✓ Failure message detected correctly!\033[0m")
-            else:
-                print("\033[91m✗ Failure message NOT found in response!\033[0m")
-                print("\033[93mYou may need to adjust the failure message.\033[0m")
-            
-            print("\033[93m" + "="*50 + "\033[0m\n")
     
     # Start brute force attack
     try:
